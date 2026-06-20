@@ -7,7 +7,6 @@ on:
 
 jobs:
 
-
  build-backend-node:
 
     runs-on: ubuntu-latest
@@ -26,6 +25,6 @@ jobs:
       - name: Construir y publicar Backend Node
         uses: docker/build-push-action@v6
         with:
-          context: ./backJs_Eval3
+          context: .
           push: true
           tags: ${{ vars.DOCKERHUB_USERNAME }}/backend-node:latest
