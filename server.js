@@ -14,42 +14,49 @@ app.use(bodyParser.json());
 // Database connection
 let db;
 
-async function initDB() {
-    try {
-        db = await mysql.createConnection({
-            host: process.env.DB_HOST,
-            port: process.env.DB_PORT,
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-            database: process.env.DB_NAME
-        });
-        console.log('Connected to MySQL database');
-        
-        // Create users table if not exists
-        await db.execute(`
-            CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                email VARCHAR(100) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        console.log('Users table ready');
+async function initDB(retries = 5, delay = 5000) {
+    for (let i = 1; i <= retries; i++) {
+        try {
+            db = await mysql.createConnection({
+                host: process.env.DB_HOST,
+                port: process.env.DB_PORT || 3306,
+                user: process.env.DB_USER,
+                password: process.env.DB_PASSWORD,
+                database: process.env.DB_NAME
+            });
+            console.log('Connected to MySQL database');
 
-        // Check if users table is empty and seed if necessary
-        const [rows] = await db.execute('SELECT COUNT(*) as count FROM users');
-        if (rows[0].count === 0) {
-            console.log('Seeding initial user...');
-            await db.execute(
-                'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-                ['admin', 'admin@example.com', 'admin123']
-            );
-            console.log('Initial user registered: admin / admin123');
+            await db.execute(`
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) UNIQUE NOT NULL,
+                    email VARCHAR(100) UNIQUE NOT NULL,
+                    password VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            console.log('Users table ready');
+
+            const [rows] = await db.execute('SELECT COUNT(*) as count FROM users');
+            if (rows[0].count === 0) {
+                console.log('Seeding initial user...');
+                await db.execute(
+                    'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
+                    ['admin', 'admin@example.com', 'admin123']
+                );
+                console.log('Initial user registered: admin / admin123');
+            }
+            return;
+        } catch (error) {
+            console.error(`Database connection attempt ${i}/${retries} failed:`, error.message);
+            if (i < retries) {
+                console.log(`Retrying in ${delay / 1000}s...`);
+                await new Promise(res => setTimeout(res, delay));
+            } else {
+                console.error('All connection attempts failed. Exiting.');
+                process.exit(1);
+            }
         }
-    } catch (error) {
-        console.error('Database connection error:', error);
-        process.exit(1);
     }
 }
 
